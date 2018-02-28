@@ -4,8 +4,7 @@
 #!/usr/bin/python3
 import os
 import sys
-import midi
-import midi_to_statematrix
+from datetime import datetime
 import cPickle as pickle
 import numpy
 from keras.models import Sequential
@@ -21,39 +20,50 @@ def createNewModel(WEAVER_INPUT, WEAVER_OUTPUT):
 	print("Assembling model...")
 	model = Sequential()
 	model.add(LSTM(256, input_shape=(WEAVER_INPUT.shape[1], WEAVER_INPUT.shape[2]), return_sequences=True))
+	print("Added LSTM")
 	model.add(Dropout(0.25))
+	print("Added 25% Dropout")
 	model.add(LSTM(512, return_sequences=True))
+	print("Added LSTM")
 	model.add(Dropout(0.25))
-	model.add(LSTM(256))
+	print("Added 25% Dropout")
+	model.add(LSTM(256, return_sequences=True))
+	print("Added LSTM")
 	model.add(Dense(256))
+	print("Added Dense layer")
 	model.add(Dropout(0.25))
+	print("Added 25% Dropout")
 	model.add(Dense(note_range))
+	print("Added final Dense layer")
 	model.add(Activation("softmax"))
+	print("Added softmax activation")
 	model.compile(loss="categorical_crossentropy", optimizer="rmsprop")
 	return model
 
 #Method for retrieving serialized melody/accompaniment data
 def getMidiData(WEAVER_INPUT, WEAVER_OUTPUT):
 	print("Retrieving melody data for network input...")
-	progress = 0
 	for melfile in os.listdir(meldir):
+		#Open binarized melodies
 		if melfile.endswith(".pkl"):
 			mel = pickle.load(open(os.path.join(os.path.dirname( __file__ ), 'melodies/serialized/') + melfile, "rb"))
 			melind = 0
+			#Separate into batches whose size is determined by sequence_length
 			for i in range(0, (len(mel) / sequence_length)):
-				currbatch = []
-				currbatch.append(mel[melind:(melind + sequence_length)])
+				currbatch = mel[melind:(melind + sequence_length)]
+				#currbatch.append(mel[melind:(melind + sequence_length)])
 				melind += sequence_length
 				WEAVER_INPUT.append(currbatch)
 		print("\tInput samples: " + str(len(WEAVER_INPUT)))
 	print("Retrieving accompaniment data for network output...")
 	for accfile in os.listdir(accdir):
+		#Open binarized accompaniments
 		if accfile.endswith(".pkl"):
 			acc = pickle.load(open(os.path.join(os.path.dirname( __file__ ), 'accompaniments/serialized/') + accfile, "rb"))
 			accind = 0
 			for i in range(0, (len(acc) / sequence_length)):
-				currbatch = []
-				currbatch.append(acc[accind:(accind + sequence_length)])
+				currbatch = acc[accind:(accind + sequence_length)]
+				#currbatch.append(acc[accind:(accind + sequence_length)])
 				accind += sequence_length
 				WEAVER_OUTPUT.append(currbatch)
 		print("\tOutput samples: " + str(len(WEAVER_OUTPUT)))
@@ -62,12 +72,14 @@ def getMidiData(WEAVER_INPUT, WEAVER_OUTPUT):
 	#print(WEAVER_INPUT[0])
 	#WEAVER_INPUT = numpy.reshape(WEAVER_INPUT, (len(WEAVER_INPUT), sequence_length, 1))
 	WEAVER_INPUT = numpy.array(WEAVER_INPUT)
+	WEAVER_OUTPUT = numpy.array(WEAVER_OUTPUT)
 	WEAVER_INPUT = WEAVER_INPUT / float(note_range)
 	return WEAVER_INPUT, WEAVER_OUTPUT
 	
 
 #Training method
 def trainModel(intrain, outtrain):
+	#Check for serialized data
 	if not os.path.exists(meldir):
 		print("Error: unable to find /melodies/serialized directory. Have you run prepdata.py?")
 		sys.exit(0)
@@ -76,8 +88,11 @@ def trainModel(intrain, outtrain):
 		print("Error: unable to find /accompaniments/serialized directory. Have you run prepdata.py?")
 		sys.exit(0)
 		return
+	#Gather data
 	intrain, outtrain = getMidiData(intrain, outtrain)
+	#Create Sequential model
 	WEAVER_MODEL = createNewModel(intrain, outtrain)
+	#Enable saving of weights to file as checkpoint
 	checkpath = "weights-improvement-{epoch:02d}-{loss:.4f}-bigger.hdf5"    
 	checkpoint = ModelCheckpoint(
 		checkpath,
@@ -86,10 +101,14 @@ def trainModel(intrain, outtrain):
 		save_best_only=True,        
 		mode='min'
 	)    
-	callbacks_list = [checkpoint]     
+	callbacks_list = [checkpoint]
+	#Train model
+	print("=== " + str(datetime.now()) + " STARTING TUNEWEAVER TRAINING ===")
 	WEAVER_MODEL.fit(intrain, outtrain, epochs=200, batch_size=64, callbacks=callbacks_list)
 
 if __name__ == '__main__':
+	print("################ TuneWeaver ################")
+	print("--------------------------------------------")
 	#Directories for melody/accompaniment midi files
 	meldir = os.path.abspath(os.path.join(os.path.dirname( __file__ ), 'melodies/serialized'))
 	accdir = os.path.abspath(os.path.join(os.path.dirname( __file__ ), 'accompaniments/serialized'))
