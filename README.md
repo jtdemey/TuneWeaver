@@ -1,5 +1,6 @@
 # TuneWeaver
-John DeMey SMP2017-2018
+##John DeMey SMP2017-2018
+##Advisor: Simon Read
 An LSTM-based recurrent neural network that can learn to produce accompaniments for melodies in MIDI format.  TuneWeaver can use a pre-trained model out of the box or it can train itself on any set of MIDI-formatted songs.
 
 # Usage
