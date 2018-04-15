@@ -5,7 +5,7 @@
 import os
 import sys
 from datetime import datetime
-import cPickle as pickle
+import pickle
 import numpy
 from keras.models import Sequential
 from keras.layers import LSTM, Dense, Activation, Dropout, Activation
@@ -13,13 +13,18 @@ from keras.callbacks import ModelCheckpoint
 
 #Creates trainable model
 def createNewModel(WEAVER_INPUT, WEAVER_OUTPUT):
-	if len(WEAVER_INPUT) == 0:
+	if len(WEAVER_INPUT) < 1:
 		print("Error: training data unavailable")
+		sys.exit(0)
+		return
+	if len(WEAVER_OUTPUT) < 1:
+		print("Error: output data unavailable")
 		sys.exit(0)
 		return
 	print("Assembling model...")
 	model = Sequential()
 	model.add(LSTM(256, input_shape=(WEAVER_INPUT.shape[1], WEAVER_INPUT.shape[2]), return_sequences=True))
+	print("SHAAAAPE: " + str(WEAVER_INPUT.shape))
 	print("Added LSTM")
 	model.add(Dropout(0.25))
 	print("Added 25% Dropout")
@@ -55,6 +60,7 @@ def getMidiData(WEAVER_INPUT, WEAVER_OUTPUT):
 				melind += sequence_length
 				WEAVER_INPUT.append(currbatch)
 		print("\tInput samples: " + str(len(WEAVER_INPUT)))
+
 	print("Retrieving accompaniment data for network output...")
 	for accfile in os.listdir(accdir):
 		#Open binarized accompaniments
@@ -67,25 +73,24 @@ def getMidiData(WEAVER_INPUT, WEAVER_OUTPUT):
 				accind += sequence_length
 				WEAVER_OUTPUT.append(currbatch)
 		print("\tOutput samples: " + str(len(WEAVER_OUTPUT)))
+
 	print("Normalizing and encoding data...")
-	print("INSIZE: " + str(len(WEAVER_INPUT)))
-	#print(WEAVER_INPUT[0])
 	#WEAVER_INPUT = numpy.reshape(WEAVER_INPUT, (len(WEAVER_INPUT), sequence_length, 1))
 	WEAVER_INPUT = numpy.array(WEAVER_INPUT)
 	WEAVER_OUTPUT = numpy.array(WEAVER_OUTPUT)
 	WEAVER_INPUT = WEAVER_INPUT / float(note_range)
+	print("WEAVERSHAPE: " + str(WEAVER_INPUT.shape))
 	return WEAVER_INPUT, WEAVER_OUTPUT
 	
-
 #Training method
-def trainModel(intrain, outtrain):
+def trainModel(intrain, outtrain, epochct):
 	#Check for serialized data
 	if not os.path.exists(meldir):
-		print("Error: unable to find /melodies/serialized directory. Have you run prepdata.py?")
+		print("Error: unable to find /melodies/serialized directory. Have you run prepweaver.py?")
 		sys.exit(0)
 		return
 	if not os.path.exists(accdir):
-		print("Error: unable to find /accompaniments/serialized directory. Have you run prepdata.py?")
+		print("Error: unable to find /accompaniments/serialized directory. Have you run prepweaver.py?")
 		sys.exit(0)
 		return
 	#Gather data
@@ -93,7 +98,7 @@ def trainModel(intrain, outtrain):
 	#Create Sequential model
 	WEAVER_MODEL = createNewModel(intrain, outtrain)
 	#Enable saving of weights to file as checkpoint
-	checkpath = "weights-improvement-{epoch:02d}-{loss:.4f}-bigger.hdf5"    
+	checkpath = "weights-improvement-{epoch:02d}-{loss:.4f}-bigger.hdf5" #To-do: change filename 
 	checkpoint = ModelCheckpoint(
 		checkpath,
 		monitor='loss', 
@@ -120,5 +125,13 @@ if __name__ == '__main__':
 	sequence_length = 100
 	#Note range
 	note_range = 78
-	trainModel(WEAVER_INPUT, WEAVER_OUTPUT)
-	
+	#Epoch count
+	epochct = 200
+	if len(sys.argv) > 1:
+		try:
+			epochct = int(sys.argv[1])
+		except:
+			print("Could not parse " + str(sys.argv[1]) + " as an integer, assuming 200 epochs.")
+			epochct = 200
+	trainModel(WEAVER_INPUT, WEAVER_OUTPUT, epochct)
+
