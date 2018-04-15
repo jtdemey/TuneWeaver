@@ -62,9 +62,14 @@ def midiToNoteStateMatrix(midifile):
 
         time += 1
 
+    #Convert note state arrays to ints to conform to Keras' learning model specifications
+    statematrix = convertNotesToInts(statematrix)
     return statematrix
 
 def noteStateMatrixToMidi(statematrix, name="example"):
+    #Transform single-integer encoded notes back into arrays
+    statematrix = convertIntsToNotes(statematrix)
+
     statematrix = numpy.asarray(statematrix)
     pattern = midi.Pattern()
     track = midi.Track()
@@ -102,3 +107,46 @@ def noteStateMatrixToMidi(statematrix, name="example"):
     track.append(eot)
 
     midi.write_midifile("{}.mid".format(name), pattern)
+
+#Added method for one-character encoding the four possible note values
+def convertNotesToInts(statematrix):
+	for i in range(0, len(statematrix)):
+		timestep = statematrix[i]
+		for n in range(0, len(timestep)):
+			note = timestep[n]
+			if note == [0, 0]:
+				timestep[n] = 0
+			elif note == [1, 1]:
+				timestep[n] = 1
+			elif note == [1, 0]:
+				timestep[n] = 2
+			elif note == [0, 1]:
+				timestep[n] = 3
+			else:
+				print("Non-note detected")
+				print(note)
+				timestep[n] = 0
+			#print(str(note) + ' converted to ' + str(timestep[n]))
+		statematrix[i] = timestep
+	return statematrix
+
+#Convert int notes back to their array form
+def convertIntsToNotes(statematrix):
+	for i in range(0, len(statematrix)):
+		timestep = statematrix[i]
+		for n in range(0, len(timestep)):
+			note = timestep[n]
+			if note == 0:
+				timestep[n] = [0, 0]
+			elif note == 1:
+				timestep[n] = [1, 1]
+			elif note == 2:
+				timestep[n] = [1, 0]
+			elif note == 3:
+				timestep[n] = [0, 1]
+			else:
+				print("Non-note detected")
+				timestep[n] = [0, 0]
+			#print(str(note) + ' converted to ' + str(timestep[n]))
+		statematrix[i] = timestep
+	return statematrix
