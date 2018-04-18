@@ -1,5 +1,6 @@
 # OBTAINED FROM: https://github.com/hexahedria/biaxial-rnn-music-composition
 # Written by hexahedria
+# Modified/supplemented by John DeMey
 # Utility script used for converting MIDI data into a numeric note sequence
 import midi, numpy
 
@@ -108,7 +109,47 @@ def noteStateMatrixToMidi(statematrix, name="example"):
 
     midi.write_midifile("{}.mid".format(name), pattern)
 
-#Added method for one-character encoding the four possible note values
+#Modified noteStateMatrixToMidi that simply returns a track object with note events without writing MIDI file
+def noteStateMatrixToTrack(statematrix):
+    #Transform single-integer encoded notes back into arrays
+    statematrix = convertIntsToNotes(statematrix)
+
+    statematrix = numpy.asarray(statematrix)
+    track = midi.Track()
+    
+    span = upperBound-lowerBound
+    tickscale = 55
+    
+    lastcmdtime = 0
+    prevstate = [[0,0] for x in range(span)]
+    for time, state in enumerate(statematrix + [prevstate[:]]):  
+        offNotes = []
+        onNotes = []
+        for i in range(span):
+            n = state[i]
+            p = prevstate[i]
+            if p[0] == 1:
+                if n[0] == 0:
+                    offNotes.append(i)
+                elif n[1] == 1:
+                    offNotes.append(i)
+                    onNotes.append(i)
+            elif n[0] == 1:
+                onNotes.append(i)
+        for note in offNotes:
+            track.append(midi.NoteOffEvent(tick=(time-lastcmdtime)*tickscale, pitch=note+lowerBound))
+            lastcmdtime = time
+        for note in onNotes:
+            track.append(midi.NoteOnEvent(tick=(time-lastcmdtime)*tickscale, velocity=40, pitch=note+lowerBound))
+            lastcmdtime = time
+            
+        prevstate = state
+    
+    eot = midi.EndOfTrackEvent(tick=1)
+    track.append(eot)
+    return track
+
+#Added method for one-hot character encoding the four possible note values
 def convertNotesToInts(statematrix):
 	for i in range(0, len(statematrix)):
 		timestep = statematrix[i]
