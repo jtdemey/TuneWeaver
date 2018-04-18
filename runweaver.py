@@ -3,10 +3,10 @@
 #############
 #!/usr/bin/python3
 import os
-from Tkinter import *
+from tkinter import *
 from tkinter.ttk import Progressbar
-from tkinter import messagebox
 import tkFileDialog
+import tkMessageBox
 from keras.models import Sequential
 from keras.layers import LSTM, Dense, Activation, Dropout, Activation
 import midi
@@ -18,7 +18,7 @@ sequence_length = 100
 note_range = 78
 
 #Model construction method
-def createNewModel():
+def createNewModel(weights):
 	print("Assembling model...")
 	model = Sequential()
 	model.add(LSTM(256, input_shape=(sequence_length, note_range), return_sequences=True))
@@ -39,9 +39,13 @@ def createNewModel():
 	print("Added final Dense layer")
 	model.add(Activation("softmax"))
 	print("Added softmax activation")
+	if weights != None:
+		print('Loading node weights...')
+		try:
+			model.load_weights(weights)
+		except:
+			print("Error while loading weights from " + str(weights) + ".")
 	model.compile(loss="categorical_crossentropy", optimizer="rmsprop")
-	print('Loading node weights...')
-	model.load_weights(self.modelDir)
 	print('Model created')
 	return model
 
@@ -53,9 +57,11 @@ class Window(Frame):
 	def __init__(self, master=None):
 		Frame.__init__(self, master)
 		self.master = master
-		self.makeComponents()
 		self.modelDir = None
 		self.melodyDir = None
+		self.modelText = StringVar()
+		self.melodyText = StringVar()
+		self.makeComponents()
 
 	def makeComponents(self):
 		self.master.title("TuneWeaver")
@@ -76,52 +82,84 @@ class Window(Frame):
 		#Attach menu
 		weaverroot.config(menu=menubar)
 
-		#Model selection field
+		#Model selection button
 		self.modelSelect = Button(self, text="Browse", command=self.selectModel)
-		self.modelSelect.place(x=600, y=180)
+		self.modelSelect.place(x=300, y=145)
 
-		#Melody selection field
+		#Model selection text
+		self.modelDisplay = Label(self, textvariable=self.modelText)
+		self.modelDisplay.place(x=380, y=150)
+
+		#Melody selection button
 		self.melodySelect = Button(self, text="Browse", command=self.selectMelody)
-		self.melodySelect.place(x=600, y=300)
+		self.melodySelect.place(x=300, y=290)
+
+		#Melody selection text
+		self.melodyDisplay = Label(self, textvariable=self.melodyText)
+		self.melodyDisplay.place(x=380, y=295)
 
 		#Run button
 		self.startButton = Button(self, text="Compose", command=self.produceAccompaniment)
-		self.startButton.place(x=600, y=450)
+		self.startButton.place(x=520, y=440)
 
 		#Progress bar
 		self.progress = Progressbar(self, orient=HORIZONTAL, length=800, mode='indeterminate')
-		self.progress.place(x=0,y=580)
+		self.progress.place(x=0, y=580)
 
 	def selectModel(self):
-		self.modelDir = tkFileDialog.askopenfilename(initialdir=os.getcwd(), title="Select .hdf5 file containing trained model weights")
+		self.modelDir = tkFileDialog.askopenfilename(initialdir=os.getcwd(), title="Select .hdf5 file containing weights")
+		splitmod = str(self.modelDir).split('/')
+		self.modelText.set(splitmod[len(splitmod) - 1])
 
 	def selectMelody(self):
 		self.melodyDir = tkFileDialog.askopenfilename(initialdir=os.getcwd(), title="Select MIDI file containing melody")
+		splitmel = str(self.melodyDir).split('/')
+		self.melodyText.set(splitmel[len(splitmel) - 1])
 
 	def produceAccompaniment(self):
 		#Check for user input
 		if self.modelDir == None:
-			messagebox.showerror('Error', 'No model weights selected.')
+			tkMessageBox.showerror('Error :(', 'No model weights selected.')
 			return
 		if self.melodyDir == None:
-			messagebox.showerror('Error', 'No melody file selected.')
+			tkMessageBox.showerror('Error :(', 'No melody file selected.')
 			return
 
 		#Prepare melody data
-		try:
-			melmidi = midi.read_midifile(self.melodyDir)
-		except:
-			messagebox.showerror('Error', 'Unable to read MIDI data in specified melody file')
-			return
-		melmatrix = midi_to_statematrix.midiToNoteStateMatrix(melmidi)
-		melmatrix = numpy.array(melmatrix)
-		#Start prediction
 		self.progress.start()
-		model = createNewModel()
+		try:
+			melmatrix = midi_to_statematrix.midiToNoteStateMatrix(self.melodyText)
+		except:
+			tkMessageBox.showerror('Error :(', 'Unable to read MIDI data in specified melody file')
+			return
+		melmatrix = numpy.array(melmatrix)
+
+		#Start prediction
+		model = createNewModel(self.modelDir)
 		newacc = model.predict(melmatrix)
-		accmidi = midi_to_statematrix.noteStateMatrixToMidi(newacc, name='newacc.mid')
-		os.rename(str(os.getcwd()) + '/newacc.mid', 'output/newacc.mid')
+
+		#Construct complete MIDI
+		fullpat = midi.Pattern()
+		try:
+			for track in melmidi:
+				fullpat.append(track)
+		except:
+			tkMessageBox.showerror('Error :(', 'Unable to add melody track(s) to new MIDI pattern')
+			return
+		try:
+			acctrack = midi_to_statematrix.noteStateMatrixToTrack(newacc)
+			fullpat.append(acctrack)
+		except:
+			tkMessageBox.showerror('Error :(', 'Unable to convert produced accompaniment into MIDI track')
+			return
+		try:
+			midi.write_midifile('newacc.mid', fullpat)
+		except:
+			tkMessageBox.showerror('Error :(', 'Unable to write final MIDI file')
+			return
+		os.rename(str(os.getcwd()) + '/newacc.mid', str(os.getcwd()) + '/output/newacc.mid')
 		self.progress.stop()
+		tkMessageBox.showinfo('Success!', 'New tune exported as newacc.mid')
 
 #Start GUI
 weaverwin = Window(weaverroot)
