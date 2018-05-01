@@ -111,14 +111,13 @@ def noteStateMatrixToMidi(statematrix, name="example"):
 
 #Modified noteStateMatrixToMidi that simply returns a track object with note events without writing MIDI file
 def noteStateMatrixToTrack(statematrix):
-    #Transform single-integer encoded notes back into arrays
-    statematrix = convertIntsToNotes(statematrix)
 
     statematrix = numpy.asarray(statematrix)
     track = midi.Track()
     
     span = upperBound-lowerBound
-    tickscale = 55
+    tickscale = 74
+	#55
     
     lastcmdtime = 0
     prevstate = [[0,0] for x in range(span)]
@@ -160,9 +159,9 @@ def convertNotesToInts(statematrix):
 			elif note == [1, 1]:
 				timestep[n] = 1
 			elif note == [1, 0]:
-				timestep[n] = 2
+				timestep[n] = 1
 			elif note == [0, 1]:
-				timestep[n] = 3
+				timestep[n] = 1
 			else:
 				print("Non-note detected")
 				print(note)
@@ -177,6 +176,7 @@ def convertIntsToNotes(statematrix):
 		timestep = statematrix[i]
 		for n in range(0, len(timestep)):
 			note = timestep[n]
+			#print(note)
 			if note == 0:
 				timestep[n] = [0, 0]
 			elif note == 1:
@@ -191,3 +191,30 @@ def convertIntsToNotes(statematrix):
 			#print(str(note) + ' converted to ' + str(timestep[n]))
 		statematrix[i] = timestep
 	return statematrix
+
+#Convert note probabilities (network output) into notes
+def convertProbabilitiesToNotes(statematrix):
+	for i in range(0, len(statematrix)):
+		timestep = statematrix[i]
+		for n in range(0, len(timestep)):
+			probs = timestep[n]
+			noteind = probs.index(max(probs))
+			note = [[0, 0] for i in range(len(probs))]
+			note[noteind] = [1, 1]
+			if note == 0:
+				timestep[n] = [0, 0]
+			elif note == 1:
+				timestep[n] = [1, 1]
+			elif note == 2:
+				timestep[n] = [1, 0]
+			elif note == 3:
+				timestep[n] = [0, 1]
+			else:
+				print("Non-note detected")
+				timestep[n] = [0, 0]
+			#print(str(note) + ' converted to ' + str(timestep[n]))
+		statematrix[i] = timestep
+	return statematrix
+
+testmatrix = midiToNoteStateMatrix('elise_mel.mid')
+testfile = noteStateMatrixToMidi(testmatrix, 'testtttt.mid')

@@ -109,6 +109,94 @@ def revisedExport(pat, trackname, melody=True):
 	midi.write_midifile(fname, pat)
 	os.rename(str(os.getcwd()) + '/' + fname, destdir + '/' + fname)
 
+#Utility functions for testing
+def printPattern(pat):
+	i = 0
+	for track in pat:
+		print("Track " + str(i) + " ###################")
+		i = i + 1
+		for note in track:
+			print(note)
+			
+def printPitches(pat):
+	i = 0
+	for track in pat:
+		print("Track " + str(i) + " ###################")
+		i = i + 1
+		for note in track:
+			print(note.get_pitch())
+
+if __name__ == '__main__':
+	#Gather necessary arguments
+	if len(sys.argv) < 2:
+		print("Usage: python prepweaver.py [directory of source MIDI files] {split-only / serialize-only / both}")
+		sys.exit(0)
+	print("################ TuneWeaver ################")
+	print("--------------------------------------------")
+	traindir = sys.argv[1]
+	optarg = "both"
+	numfiles = 0
+	numprocessed = 0
+	if len(sys.argv) > 2:
+		optarg = sys.argv[2]
+
+	#Split MIDI files into their respective melodies and accompaniments
+	if optarg == "split-only" or optarg == "both":
+		print("Looking for MIDI files in " + str(traindir) + "...")
+		try:
+			for f in os.listdir(traindir):
+				if str(f).endswith('.mid'):
+					numfiles = numfiles + 1
+					print('Splitting ' + str(f) + "...")
+					try:
+						revisedExtract(midi.read_midifile(traindir + '/' + f), str(f))
+						numprocessed = numprocessed + 1
+					except:
+						print("Error when performing median extract on " + str(f) + ", skipping...")
+		except:
+			print("Error: files in " + str(traindir) + "are not proper MIDI format.")
+			sys.exit(0)
+	print("Successfully split " + str(numprocessed) + " of " + str(numfiles) + " in directory.")
+
+	#Serialize and save for network training
+	if optarg == "serialize-only" or optarg == "both":
+		#Serialize state matrices of melodies for training
+		print("Saving melodies as state matrices...")
+		try:
+			mel_index = 1
+			for m in os.listdir(meldir):
+				if str(m) == "serialized":
+					continue
+				elif str(m).endswith('.mid'):
+					print("\tConverting " + str(m) + " to note state matrix...")
+					notestates = midi_to_statematrix.midiToNoteStateMatrix(meldir + "/" + str(m))
+					print("\tSerializing " + str(m) + "...")
+					with open((melpkldir + "/mel" + str(mel_index) + ".pkl"), "wb") as pdump:
+						pickle.dump(notestates, pdump)
+					mel_index += 1
+		except:
+			print("Error: unable to serialize melodies.")
+			sys.exit(0)
+		#Serialize state matrices of accompaniments for output comparison
+		print("Saving accompaniments as state matrices...")
+		try:
+			acc_index = 1
+			for a in os.listdir(accdir):
+				if str(a) == "serialized":
+					continue
+				elif str(a).endswith('.mid'):
+					print("\tConverting " + str(a) + " to note state matrix...")
+					notestates = midi_to_statematrix.midiToNoteStateMatrix(accdir + "/" + str(a))
+					print("\tSerializing " + str(a) + "...")
+					with open((accpkldir + "/acc" + str(acc_index) + ".pkl"), "wb") as pdump:
+						pickle.dump(notestates, pdump)
+					acc_index += 1
+		except:
+			print("Error: unable to serialize accompaniments.")
+			sys.exit(0)
+
+
+
 #Deprecated extract method
 def medianExtract(pattern, trackname):
 	tones = [[] for i in range(len(pattern))] #Tones in main song
@@ -218,81 +306,3 @@ def exportTrack(mel, acc, tempos, trackname, melody=True):
 	midi.write_midifile(fname, newpat)
 	#Move to proper directory
 	os.rename(str(os.getcwd()) + '/' + fname, destdir + '/' + fname)
-
-#Utility functions for testing
-def printPattern(pat):
-	i = 0
-	for track in pat:
-		print("Track " + str(i) + " ###################")
-		i = i + 1
-		for note in track:
-			print(note)
-			
-def printPitches(pat):
-	i = 0
-	for track in pat:
-		print("Track " + str(i) + " ###################")
-		i = i + 1
-		for note in track:
-			print(note.get_pitch())
-
-if __name__ == '__main__':
-	#Gather necessary arguments
-	if len(sys.argv) < 2:
-		print("Usage: python prepweaver.py [directory of source MIDI files] {split-only / serialize-only / both}")
-		sys.exit(0)
-	print("################ TuneWeaver ################")
-	print("--------------------------------------------")
-	traindir = sys.argv[1]
-	optarg = "both"
-	if len(sys.argv) > 2:
-		optarg = sys.argv[2]
-
-	#Split MIDI files into their respective melodies and accompaniments
-	if optarg == "split-only" or optarg == "both":
-		print("Looking for MIDI files in " + str(traindir) + "...")
-		try:
-			for f in os.listdir(traindir):
-				if str(f).endswith('.mid'):
-					print('Splitting ' + str(f) + "...")
-					revisedExtract(midi.read_midifile(traindir + '/' + f), str(f))
-		except:
-			print("Error: files in " + str(traindir) + "are not proper MIDI format.")
-			sys.exit(0)
-
-	#Serialize and save for network training
-	if optarg == "serialize-only" or optarg == "both":
-		#Serialize state matrices of melodies for training
-		print("Saving melodies as state matrices...")
-		try:
-			mel_index = 1
-			for m in os.listdir(meldir):
-				if str(m) == "serialized":
-					continue
-				elif str(m).endswith('.mid'):
-					print("\tConverting " + str(m) + " to note state matrix...")
-					notestates = midi_to_statematrix.midiToNoteStateMatrix(meldir + "/" + str(m))
-					print("\tSerializing " + str(m) + "...")
-					with open((melpkldir + "/mel" + str(mel_index) + ".pkl"), "wb") as pdump:
-						pickle.dump(notestates, pdump)
-					mel_index += 1
-		except:
-			print("Error: unable to serialize melodies.")
-			sys.exit(0)
-		#Serialize state matrices of accompaniments for output comparison
-		print("Saving accompaniments as state matrices...")
-		try:
-			acc_index = 1
-			for a in os.listdir(accdir):
-				if str(a) == "serialized":
-					continue
-				elif str(a).endswith('.mid'):
-					print("\tConverting " + str(a) + " to note state matrix...")
-					notestates = midi_to_statematrix.midiToNoteStateMatrix(accdir + "/" + str(a))
-					print("\tSerializing " + str(a) + "...")
-					with open((accpkldir + "/acc" + str(acc_index) + ".pkl"), "wb") as pdump:
-						pickle.dump(notestates, pdump)
-					acc_index += 1
-		except:
-			print("Error: unable to serialize accompaniments.")
-			sys.exit(0)
