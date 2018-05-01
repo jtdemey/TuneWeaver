@@ -32,11 +32,7 @@ def createNewModel(WEAVER_INPUT, WEAVER_OUTPUT, weights):
 	print("Added LSTM")
 	model.add(Dropout(0.25))
 	print("Added 25% Dropout")
-	model.add(LSTM(256, return_sequences=True))
-	print("Added LSTM")
-	model.add(Dropout(0.25))
-	print("Added 25% Dropout")
-	model.add(LSTM(256, return_sequences=True))
+	model.add(LSTM(512, return_sequences=True))
 	print("Added LSTM")
 	model.add(Dropout(0.25))
 	print("Added 25% Dropout")
@@ -89,7 +85,7 @@ def getMidiData(WEAVER_INPUT, WEAVER_OUTPUT):
 		sys.stdout.write("\r\tInput samples: " + str(len(WEAVER_INPUT)) + " (" + str(melsgot / meltotal * 100)[:5] + "%)")
 		sys.stdout.flush()
 
-	print("Retrieving accompaniment data for network output...")
+	print("\nRetrieving accompaniment data for network output...")
 	for accfile in os.listdir(accdir):
 		#Open binarized accompaniments
 		if accfile.endswith(".pkl"):
@@ -104,7 +100,7 @@ def getMidiData(WEAVER_INPUT, WEAVER_OUTPUT):
 		sys.stdout.write("\r\tOutput samples: " + str(len(WEAVER_OUTPUT)) + " (" + str(accsgot / acctotal * 100)[:5] + "%)")
 		sys.stdout.flush()
 
-	print("Normalizing and encoding data...")
+	print("\nNormalizing and encoding data...")
 	#WEAVER_INPUT = numpy.reshape(WEAVER_INPUT, (len(WEAVER_INPUT), sequence_length, 1))
 	WEAVER_INPUT = numpy.array(WEAVER_INPUT)
 	WEAVER_OUTPUT = numpy.array(WEAVER_OUTPUT)

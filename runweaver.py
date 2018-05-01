@@ -11,6 +11,7 @@ from keras.models import Sequential
 from keras.layers import LSTM, Dense, Activation, Dropout, Activation
 import midi
 import midi_to_statematrix
+import numpy
 
 #Length of sequences in timesteps
 sequence_length = 100
@@ -41,10 +42,10 @@ def createNewModel(weights):
 	print("Added softmax activation")
 	if weights != None:
 		print('Loading node weights...')
-		try:
-			model.load_weights(weights)
-		except:
-			print("Error while loading weights from " + str(weights) + ".")
+		#try:
+		model.load_weights(weights)
+		#except:
+		#	print("Error while loading weights from " + str(weights) + ".")
 	model.compile(loss="categorical_crossentropy", optimizer="rmsprop")
 	print('Model created')
 	return model
@@ -68,7 +69,7 @@ class Window(Frame):
 		self.pack(fill=BOTH, expand=1)
 
 		#Background
-		bgimg = PhotoImage(file='./weaver/bg.png')
+		bgimg = PhotoImage(file='./media/bg.png')
 		bglbl = Label(self, image=bgimg)
 		bglbl.image = bgimg
 		bglbl.place(x=0, y=0, relwidth=1, relheight=1)
@@ -84,23 +85,23 @@ class Window(Frame):
 
 		#Model selection button
 		self.modelSelect = Button(self, text="Browse", command=self.selectModel)
-		self.modelSelect.place(x=300, y=145)
+		self.modelSelect.place(x=320, y=175)
 
 		#Model selection text
 		self.modelDisplay = Label(self, textvariable=self.modelText)
-		self.modelDisplay.place(x=380, y=150)
+		self.modelDisplay.place(x=400, y=180)
 
 		#Melody selection button
 		self.melodySelect = Button(self, text="Browse", command=self.selectMelody)
-		self.melodySelect.place(x=300, y=290)
+		self.melodySelect.place(x=320, y=320)
 
 		#Melody selection text
 		self.melodyDisplay = Label(self, textvariable=self.melodyText)
-		self.melodyDisplay.place(x=380, y=295)
+		self.melodyDisplay.place(x=400, y=325)
 
 		#Run button
 		self.startButton = Button(self, text="Compose", command=self.produceAccompaniment)
-		self.startButton.place(x=520, y=440)
+		self.startButton.place(x=540, y=470)
 
 		#Progress bar
 		self.progress = Progressbar(self, orient=HORIZONTAL, length=800, mode='indeterminate')
@@ -113,8 +114,11 @@ class Window(Frame):
 
 	def selectMelody(self):
 		self.melodyDir = tkFileDialog.askopenfilename(initialdir=os.getcwd(), title="Select MIDI file containing melody")
-		splitmel = str(self.melodyDir).split('/')
-		self.melodyText.set(splitmel[len(splitmel) - 1])
+		if '/' in self.melodyDir:
+			splitmel = str(self.melodyDir).split('/')
+			self.melodyText.set(splitmel[len(splitmel) - 1])
+		else:
+			self.melodyText.set(self.melodyDir)
 
 	def produceAccompaniment(self):
 		#Check for user input
@@ -127,35 +131,70 @@ class Window(Frame):
 
 		#Prepare melody data
 		self.progress.start()
+		predmel = []
+		melind = 0
 		try:
-			melmatrix = midi_to_statematrix.midiToNoteStateMatrix(self.melodyText)
+			melmatrix = midi_to_statematrix.midiToNoteStateMatrix(self.melodyText.get())
 		except:
 			tkMessageBox.showerror('Error :(', 'Unable to read MIDI data in specified melody file')
+			self.progress.stop()
 			return
-		melmatrix = numpy.array(melmatrix)
+		for i in range(0, (len(melmatrix) / sequence_length)):
+			currbatch = melmatrix[melind:(melind + sequence_length)]
+			melind += sequence_length
+			predmel.append(currbatch)
+		predmel = numpy.array(predmel)
+		predmel = predmel / float(note_range)
 
 		#Start prediction
 		model = createNewModel(self.modelDir)
-		newacc = model.predict(melmatrix)
+		predacc = model.predict_classes(predmel)
+
+		#Create statematrix for new accompaniment
+		newacc = [[[0, 0] for k in range(78)] for i in range(predmel.shape[0] * predmel.shape[1])]
+		newacc = numpy.array(newacc)
+
+		#Transfer predicted accompaniment notes from sequences to statematrix
+		ts_index = 0
+		for seq in predacc:
+			for tone in seq:
+				newacc[ts_index][tone] = [1, 1]
+				ts_index += 1
+		newacc = numpy.array(newacc)
+
+		#Establish held tones
+		heldtone = 999
+		note_index = 0
+		for ts in newacc:
+			note_index = 0
+			for note in ts:
+				if note[0] == 1 and note[1] == 1 and heldtone != note_index:
+					heldtone = note_index
+					#print("HELD TONE IS: " + str(note_index))
+				elif note[0] == 1 and note[1] == 1 and heldtone == note_index:
+					note[1] = 0
+				note_index += 1
 
 		#Construct complete MIDI
-		fullpat = midi.Pattern()
-		try:
-			for track in melmidi:
-				fullpat.append(track)
-		except:
-			tkMessageBox.showerror('Error :(', 'Unable to add melody track(s) to new MIDI pattern')
-			return
-		try:
-			acctrack = midi_to_statematrix.noteStateMatrixToTrack(newacc)
-			fullpat.append(acctrack)
-		except:
-			tkMessageBox.showerror('Error :(', 'Unable to convert produced accompaniment into MIDI track')
-			return
+		fullpat = midi.read_midifile(self.melodyDir)
+		for track in fullpat:
+			for evt in track:
+				if isinstance(evt, midi.SetTempoEvent):
+					print("EVT: " + str(evt))
+		#try:
+		print(newacc.shape)
+		print(newacc)
+		acctrack = midi_to_statematrix.noteStateMatrixToTrack(newacc)
+		fullpat.append(acctrack)
+		#except:
+			#tkMessageBox.showerror('Error :(', 'Unable to convert produced accompaniment into MIDI track')
+			#self.progress.stop()
+			#return
 		try:
 			midi.write_midifile('newacc.mid', fullpat)
 		except:
 			tkMessageBox.showerror('Error :(', 'Unable to write final MIDI file')
+			self.progress.stop()
 			return
 		os.rename(str(os.getcwd()) + '/newacc.mid', str(os.getcwd()) + '/output/newacc.mid')
 		self.progress.stop()
