@@ -116,7 +116,7 @@ def noteStateMatrixToTrack(statematrix):
     track = midi.Track()
     
     span = upperBound-lowerBound
-    tickscale = 74
+    tickscale = 55
 	#55
     
     lastcmdtime = 0
@@ -216,5 +216,5 @@ def convertProbabilitiesToNotes(statematrix):
 		statematrix[i] = timestep
 	return statematrix
 
-testmatrix = midiToNoteStateMatrix('elise_mel.mid')
-testfile = noteStateMatrixToMidi(testmatrix, 'testtttt.mid')
+#testmatrix = midiToNoteStateMatrix('elise_mel.mid')
+#testfile = noteStateMatrixToMidi(testmatrix, 'testtttt.mid')
